@@ -143,26 +143,32 @@ fn option_details_for_path(cmd: &Command, path: &str) -> String {
     for o in p.get_opts() {
         if let Some(longs) = o.get_long_and_visible_aliases() {
             opts.extend(longs.iter().map(|long| {
+                let (value, with_space) = vals_for(o);
                 format!(
                     "--{})
+                    {}
                     COMPREPLY=({})
                     return 0
                     ;;",
                     long,
-                    vals_for(o)
+                    with_space.completion_string(),
+                    value
                 )
             }));
         }
 
         if let Some(shorts) = o.get_short_and_visible_aliases() {
             opts.extend(shorts.iter().map(|short| {
+                let (value, with_space) = vals_for(o);
                 format!(
                     "-{})
+                    {}
                     COMPREPLY=({})
                     return 0
                     ;;",
                     short,
-                    vals_for(o)
+                    with_space.completion_string(),
+                    value
                 )
             }));
         }
@@ -171,20 +177,41 @@ fn option_details_for_path(cmd: &Command, path: &str) -> String {
     opts.join("\n                ")
 }
 
-fn vals_for(o: &Arg) -> String {
+pub enum TrailingSpace {
+    WithSpace,
+    Filenames,
+}
+
+impl TrailingSpace {
+    pub fn completion_string(&self) -> String {
+        match self {
+            TrailingSpace::WithSpace => "true;",
+            TrailingSpace::Filenames => "compopt -o filenames;",
+        }
+        .to_string()
+    }
+}
+
+fn vals_for(o: &Arg) -> (String, TrailingSpace) {
     debug!("vals_for: o={}", o.get_id());
 
     if let Some(vals) = crate::generator::utils::possible_values(o) {
-        format!(
-            "$(compgen -W \"{}\" -- \"${{cur}}\")",
-            vals.iter()
-                .filter(|pv| !pv.is_hide_set())
-                .map(PossibleValue::get_name)
-                .collect::<Vec<_>>()
-                .join(" ")
+        (
+            format!(
+                "$(compgen -W \"{}\" -- \"${{cur}}\")",
+                vals.iter()
+                    .filter(|pv| !pv.is_hide_set())
+                    .map(PossibleValue::get_name)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            TrailingSpace::WithSpace,
         )
     } else {
-        String::from("$(compgen -f \"${cur}\")")
+        (
+            String::from("$(compgen -f \"${cur}\")"),
+            TrailingSpace::Filenames,
+        )
     }
 }
 
